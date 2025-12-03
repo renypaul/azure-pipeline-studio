@@ -7,7 +7,7 @@
     "onCommand:azurePipelineStudio.formatOriginalYaml"
   ],
   "bin": {
-    "ado-yaml-formatter": "./extension-bundle.js"
+    "azure-pipeline-formatter": "./extension-bundle.js"
   },
   "categories": [
     "Formatters",

@@ -1,7 +1,7 @@
 - id: azure-pipeline-formatter
   name: Azure DevOps Pipeline YAML Formatter
   description: Format Azure DevOps Pipeline YAML files with comment preservation
-  entry: ado-yaml-formatter
+  entry: azure-pipeline-formatter
   language: node
   language_version: 20.9.0
   types: [yaml]
