@@ -1,0 +1,30 @@
+# Source files (not needed in npm package)
+extension.js
+parser.js
+azurePipelineYaml.js
+*.g4
+
+# Build configuration
+webpack.config.js
+build.sh
+.vscodeignore
+
+# Development files
+.git/
+.vscode/
+.github/
+node_modules/
+tests/
+dist/
+
+# Documentation (keep README.md)
+CHANGELOG
+
+# Generated files not needed
+generated/
+generated-cjs/
+images/
+
+# VS Code specific
+icon.png
+*.vsix

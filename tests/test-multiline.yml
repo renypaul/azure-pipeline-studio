@@ -1,0 +1,10 @@
+steps:
+- script: |
+    echo "Building..."
+    npm ci
+    npm run build
+  displayName: Build Application
+
+- task: TestTask@1
+  inputs:
+    value: simple

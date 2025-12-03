@@ -1,0 +1,15 @@
+steps:
+- bash: |
+    echo "Hello World"
+    echo "Line 2"
+
+- script: |
+    echo "Script step"
+
+- powershell: |
+    Write-Host "Test"
+
+- task: SomeTask@1
+  inputs:
+    script: |
+      echo "Task script"

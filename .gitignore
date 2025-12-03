@@ -1,0 +1,15 @@
+/node_modules
+/dist
+*.vsix
+/temp
+/generated
+/generated-cjs
+/.antlr
+extension-bundle.js
+input.json
+/tests/debug.txt
+/tests/output.txt
+.terragrunt-cache
+.terraform
+.terraform.lock.hcl
+terragrunt-debug.tfvars.json

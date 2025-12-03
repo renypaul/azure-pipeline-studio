@@ -1,0 +1,44 @@
+{
+  "configurations": [
+    {
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "env": {
+        "NODE_ENV": "debug"
+      },
+      "name": "Run Extension",
+      "outFiles": [
+        "${workspaceFolder}/extension.js"
+      ],
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "type": "extensionHost"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Node App",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${workspaceFolder}/terragrunt.js",
+      "args": [
+        "-a",
+        "-f",
+        "tests/terraform-module/outputs.tf"
+      ]
+    },
+    {
+      "name": "Debug ANTLR4 grammar",
+      "type": "antlr-debug",
+      "request": "launch",
+      "input": "/root/op.hcl",
+      "grammar": "${workspaceFolder}/hclParser.g4",
+      "startRule": "configFile",
+      "printParseTree": true,
+      "visualParseTree": true
+    }
+  ],
+  "version": "0.2.0"
+}
