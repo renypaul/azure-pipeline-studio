@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to Azure Pipeline Studio will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2025-12-03
+
+### Added
+- Initial release of Azure Pipeline Studio
+- Template expansion with repository resources support
+- Complete Azure DevOps expression support (33 functions across ${{ }}, $[], $() formats)
+- Advanced YAML formatting with customizable options:
+  - Configurable indentation (1-8 spaces)
+  - Line width control
+  - Array indentation options
+  - Step spacing between pipeline elements
+  - Section spacing with `blankLinesBetweenSections` (0-4) and `firstBlockBlankLines` (0-4)
+- Modern yaml package (v2.x) with native comment preservation
+- CLI tool with batch processing and recursive formatting
+- Pre-commit hook integration for automated formatting
+- VS Code extension with:
+  - Side-by-side YAML rendering
+  - Format on save support
+  - Repository location configuration
+  - Context menu integration
+- File-level formatting directives (# ado-yaml-format)
+- Comprehensive test suite with 57 tests covering:
+  - YAML parsing and formatting
+  - Expression evaluation
+  - Template expansion
+  - Edge cases and error handling
+
+### Changed
+- Refactored code into separate modules (formatter.js, utils.js, extension.js)
+- Improved section spacing logic for cleaner pipeline formatting
+- Updated maximum blank line ranges from 0-6 to 0-4 for better consistency
+
+### Fixed
+- Correct section spacing logic for Azure Pipeline YAML formatter
+- Proper handling of template expressions and conditional blocks
+- Empty value preservation in formatted output
+
+[1.0.0]: https://github.com/HPInc/azure-pipeline-studio/releases/tag/v1.0.0
