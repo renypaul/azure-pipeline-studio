@@ -10,6 +10,106 @@ function escapeRegExp(string) {
 }
 
 /**
+ * Protect folded/literal scalar blocks from YAML parsing
+ * @param {string} content - The YAML content
+ * @returns {{ content: string, scalarMap: Map }} The content with placeholders and the mapping
+ */
+function protectBlockScalars(content) {
+    const lines = content.split(/\r?\n/);
+    const scalarMap = new Map();
+    let counter = 0;
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const match = line.match(/^(\s*)([^:]+):\s*([|>][-+]?)\s*$/);
+
+        if (match) {
+            const indent = match[1];
+            const key = match[2];
+            const indicator = match[3];
+            const lineIndent = indent.length;
+
+            // For block scalars, content must be indented more than the key line
+            // We need to find the minimum required indent for content
+            const minContentIndent = lineIndent + 2;
+
+            // Collect the block scalar content
+            const blockLines = [line];
+            i++;
+
+            // Gather all lines that are part of this block scalar
+            while (i < lines.length) {
+                const nextLine = lines[i];
+                const nextTrimmed = nextLine.trim();
+                const nextIndent = nextLine.length - nextLine.trimStart().length;
+
+                // Empty lines are part of the block
+                if (nextTrimmed === '') {
+                    blockLines.push(nextLine);
+                    i++;
+                    continue;
+                }
+
+                // Lines must be indented at least minContentIndent to be part of the block
+                if (nextIndent >= minContentIndent) {
+                    blockLines.push(nextLine);
+                    i++;
+                    continue;
+                }
+
+                // We've reached the end of the block
+                break;
+            }
+
+            // Create placeholder - use a quoted string to prevent YAML from interpreting it
+            const placeholder = `__BLOCK_SCALAR_${counter}__`;
+            scalarMap.set(placeholder, blockLines.join('\n'));
+            // Use quoted placeholder so YAML treats it as a simple string
+            result.push(`${indent}${key}: "${placeholder}"`);
+            counter++;
+        } else {
+            result.push(line);
+            i++;
+        }
+    }
+
+    return { content: result.join('\n'), scalarMap };
+}
+
+/**
+ * Restore block scalars from placeholders
+ * @param {string} content - The content with placeholders
+ * @param {Map} scalarMap - Map of placeholder to original block scalar
+ * @returns {string} Content with restored block scalars
+ */
+function restoreBlockScalars(content, scalarMap) {
+    let result = content;
+    for (const [placeholder, originalBlock] of scalarMap) {
+        // The placeholder will be in the output as a quoted string like: key: "__BLOCK_SCALAR_0__"
+        // We need to replace it with the original block scalar
+        const lines = originalBlock.split('\n');
+        const firstLine = lines[0]; // This is "key: |" or "key: >"
+        const restLines = lines.slice(1); // Content lines
+
+        // Extract the block indicator (|, >, |-, >+, etc.)
+        const blockIndicator = firstLine.substring(firstLine.lastIndexOf(':') + 1).trim();
+
+        // Build the full replacement: indicator + content lines
+        const fullReplacement = restLines.length > 0 ? blockIndicator + '\n' + restLines.join('\n') : blockIndicator;
+
+        // Replace "key: "__BLOCK_SCALAR_N__"" or "key: '__BLOCK_SCALAR_N__'" with "key: |<content>"
+        const quotedPlaceholder = `"${placeholder}"`;
+        const singleQuotedPlaceholder = `'${placeholder}'`;
+
+        result = result.replace(new RegExp(`: ${escapeRegExp(quotedPlaceholder)}`, 'g'), `: ${fullReplacement}`);
+        result = result.replace(new RegExp(`: ${escapeRegExp(singleQuotedPlaceholder)}`, 'g'), `: ${fullReplacement}`);
+    }
+    return result;
+}
+
+/**
  * Replace Azure Pipeline template expressions with placeholders
  * @param {string} content - The YAML content
  * @returns {{ content: string, placeholderMap: Map }} The content with placeholders and the mapping
@@ -443,6 +543,30 @@ function applyPipelineFormatting(text, newline, options) {
     const stepPattern =
         /^\s*-\s+(task|bash|powershell|pwsh|script|sh|checkout|download|downloadBuild|getPackage|publish|reviewApp|template):/;
 
+    // Helper function to find if we're inside a steps section by looking backwards
+    const isInsideStepsSection = (lines, currentIndex, currentIndent) => {
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            const indent = line.length - line.trimStart().length;
+
+            // If we found 'steps:', check if current line is at same or greater indent
+            if (trimmed === 'steps:' && !line.includes('${{')) {
+                // Current line is inside steps if it's at same indent or greater
+                return currentIndent >= indent;
+            }
+
+            // If we find a line at lower indent that's not blank/comment, we've left the steps context
+            if (indent < currentIndent && trimmed && !trimmed.startsWith('#')) {
+                // But check if this is the steps: line itself
+                if (trimmed === 'steps:' && !line.includes('${{')) {
+                    return currentIndent >= indent;
+                }
+            }
+        }
+        return false;
+    };
+
     // Define top-level sections for first block blank lines
     const topLevelSections = ['stages:', 'jobs:', 'steps:', 'trigger:', 'pr:', 'resources:', 'pool:', 'variables:'];
 
@@ -468,6 +592,18 @@ function applyPipelineFormatting(text, newline, options) {
     // Step spacing state
     let prevWasCommentBeforeStep = false;
     const lastListItemAtIndent = new Map();
+
+    // Simplified steps section tracking - track if we've seen a step in current steps section
+    let lastStepInStepsSection = -1; // Line number of last step we saw in steps section
+    let lastStepIndent = -1; // Indent level of last step we saw
+
+    // Simplified variables section tracking - track if we're in a variables section
+    let lastItemInVariablesSection = -1; // Line number of last item in variables section
+    let currentVariablesIndent = -1; // Indent level of current variables section
+
+    // Track multi-line blocks (bash: |, script: |, etc.) - don't modify blank lines inside them
+    let inMultiLineBlock = false;
+    let multiLineBlockIndent = -1;
 
     // Section spacing state
     let foundFirstSection = false;
@@ -496,73 +632,96 @@ function applyPipelineFormatting(text, newline, options) {
 
                 let keepBlank = false;
 
-                // Only keep blank lines that are directly after stages:, jobs:, or steps: (indent 0 or 2)
-                // Find the previous non-blank line
-                const prevNonBlankIndex = pass1.length - 1;
-                let prevLine = null;
-                for (let j = prevNonBlankIndex; j >= 0; j--) {
-                    if (pass1[j].trim() !== '') {
-                        prevLine = pass1[j];
-                        break;
-                    }
-                }
-
-                if (prevLine) {
-                    const prevIndent = prevLine.length - prevLine.trimStart().length;
-                    const prevTrimmed = prevLine.trim();
-
-                    // Keep blank if previous line was stages:, jobs:, or steps: at root level
-                    if (
-                        prevIndent === 0 &&
-                        (prevTrimmed === 'stages:' || prevTrimmed === 'jobs:' || prevTrimmed === 'steps:')
-                    ) {
-                        keepBlank = true;
-                    }
-                    // NOTE: We DON'T keep blank lines between root-level sections here
-                    // because Section 3 (section spacing logic) handles that with betweenSectionBlankLines option
-                    // Keep blank if previous line was a comment (preserve blank after comment)
-                    // Cases where code is commented out from VSCode where there are spaces in between stages/steps or jobs
-                    else if (prevWasComment) {
-                        keepBlank = true;
-                    }
-                    // Keep blank lines in steps section (for step spacing)
-                    else if (currentSection === 'steps' || stepSpacingSections.includes(currentSection)) {
-                        keepBlank = true;
-                    }
-                    // Keep blank lines between direct children in stages/jobs sections (indent 0 or 2 only)
-                    else if (listItemSpacingSections.includes(currentSection)) {
-                        if (nextLineIndent === 0 || nextLineIndent === 2) {
-                            keepBlank = true;
-                        }
-                    }
-                }
-
-                // Trailing Comments removal rule
-                if (keepBlank && nextTrimmed.startsWith('#')) {
-                    let hasContentBefore = false;
-                    for (let j = pass1.length - 1; j >= 0; j--) {
-                        if (pass1[j].trim() !== '' && !pass1[j].trim().startsWith('#')) {
-                            hasContentBefore = true;
+                // Always keep blank lines inside multi-line blocks (but as empty strings)
+                if (inMultiLineBlock) {
+                    pass1.push(''); // Push empty string for blank lines in multi-line blocks
+                    prevWasComment = false;
+                    continue; // Skip the rest of blank line processing
+                } else {
+                    // Only keep blank lines that are directly after stages:, jobs:, or steps: (indent 0 or 2)
+                    // Find the previous non-blank line
+                    const prevNonBlankIndex = pass1.length - 1;
+                    let prevLine = null;
+                    for (let j = prevNonBlankIndex; j >= 0; j--) {
+                        if (pass1[j].trim() !== '') {
+                            prevLine = pass1[j];
                             break;
                         }
-                        if (pass1[j].trim().startsWith('#')) break;
                     }
 
-                    if (hasContentBefore) {
-                        let hasContentAfter = false;
-                        for (let j = nextNonBlank; j < lines.length; j++) {
-                            const futureTrimmed = lines[j].trim();
-                            if (futureTrimmed !== '' && !futureTrimmed.startsWith('#')) {
-                                hasContentAfter = true;
-                                break;
+                    if (prevLine) {
+                        const prevIndent = prevLine.length - prevLine.trimStart().length;
+                        const prevTrimmed = prevLine.trim();
+
+                        // Keep blank if previous line was stages:, jobs:, or steps: at root level
+                        if (
+                            prevIndent === 0 &&
+                            (prevTrimmed === 'stages:' || prevTrimmed === 'jobs:' || prevTrimmed === 'steps:')
+                        ) {
+                            keepBlank = true;
+                        }
+                        // NOTE: We DON'T keep blank lines between root-level sections here
+                        // because Section 3 (section spacing logic) handles that with betweenSectionBlankLines option
+                        // Keep blank if previous line was a comment (preserve blank after comment)
+                        // Cases where code is commented out from VSCode where there are spaces in between stages/steps or jobs
+                        else if (prevWasComment) {
+                            keepBlank = true;
+                        }
+                        // Keep blank lines in steps section (for step spacing)
+                        else if (currentSection === 'steps' || stepSpacingSections.includes(currentSection)) {
+                            keepBlank = true;
+                        }
+                        // Keep blank lines between direct children in stages/jobs sections (indent 0 or 2 only)
+                        else if (listItemSpacingSections.includes(currentSection)) {
+                            if (nextLineIndent === 0 || nextLineIndent === 2) {
+                                keepBlank = true;
                             }
                         }
+                    }
 
-                        if (!hasContentAfter) {
-                            keepBlank = false;
+                    // Trailing Comments rule
+                    // Keep exactly ONE blank line before trailing comments (comments at EOF with no content after)
+                    if (keepBlank && nextTrimmed.startsWith('#')) {
+                        let hasContentBefore = false;
+                        let lastContentIndex = -1;
+                        for (let j = pass1.length - 1; j >= 0; j--) {
+                            if (pass1[j].trim() !== '' && !pass1[j].trim().startsWith('#')) {
+                                hasContentBefore = true;
+                                lastContentIndex = j;
+                                break;
+                            }
+                            if (pass1[j].trim().startsWith('#')) break;
+                        }
+
+                        if (hasContentBefore) {
+                            let hasContentAfter = false;
+                            for (let j = nextNonBlank; j < lines.length; j++) {
+                                const futureTrimmed = lines[j].trim();
+                                if (futureTrimmed !== '' && !futureTrimmed.startsWith('#')) {
+                                    hasContentAfter = true;
+                                    break;
+                                }
+                            }
+
+                            // This is a trailing comment block (no content after)
+                            if (!hasContentAfter) {
+                                // Check how many blank lines exist after last content
+                                let blankCount = 0;
+                                for (let j = lastContentIndex + 1; j < pass1.length; j++) {
+                                    if (pass1[j].trim() === '') {
+                                        blankCount++;
+                                    }
+                                }
+
+                                // Keep exactly one blank line before trailing comments
+                                // Remove this blank if we already have one or more
+                                if (blankCount >= 1) {
+                                    keepBlank = false;
+                                }
+                            }
                         }
                     }
-                }
+                } // End of else block for non-multi-line-block logic
 
                 if (keepBlank) {
                     pass1.push(line);
@@ -577,85 +736,129 @@ function applyPipelineFormatting(text, newline, options) {
 
         // --- Handle Non-Blank Lines ---
 
-        // 1. Step Spacing
+        // Track if this line starts a multi-line block (before we set inMultiLineBlock)
+        const startsMultiLineBlock = /:\s*[|>][-+]?\s*$/.test(line);
+
+        // Detect multi-line block start (bash: |, script: |, etc.)
+        if (startsMultiLineBlock) {
+            inMultiLineBlock = true;
+            multiLineBlockIndent = lineIndent;
+        }
+        // Exit multi-line block when we outdent
+        else if (inMultiLineBlock && lineIndent <= multiLineBlockIndent && trimmed !== '') {
+            inMultiLineBlock = false;
+            multiLineBlockIndent = -1;
+        }
+
+        // 1. Step Spacing - Simplified approach
         if (options.stepSpacing) {
-            // Only match actual steps (task, bash, etc.) with template expressions
-            // Don't match simple list items with template expressions (like dependsOn items)
-            const isStepWithExpression = /^\s*-\s+\$\{\{.*\}\}:/.test(line);
-            const isStep = stepPattern.test(line) || isStepWithExpression;
-            let isListItemInSection = false;
+            // Track when we're in steps/jobs/stages sections
+            let inListSection = false;
+            let listSectionIndent = -1;
 
-            if (stepSpacingSections.includes(currentSection)) {
-                isListItemInSection = isStep;
-            } else if (listItemSpacingSections.includes(currentSection)) {
-                // For stages/jobs, include template items at any indent level,
-                // conditional expressions at indent <= 4 (sibling level conditionals),
-                // but restrict other list items to indent 0 or 2
-                const isTemplateItem = /^\s*-\s+template:/.test(line);
-                const isConditionalExpression = /^\s*-\s+\$\{\{\s*if\s/.test(line) && lineIndent <= 4;
-                isListItemInSection =
-                    isStep ||
-                    isTemplateItem ||
-                    isConditionalExpression ||
-                    (/^\s*-\s+/.test(line) && (lineIndent === 0 || lineIndent === 2));
-            }
-
-            const shouldApplySpacing = listItemSpacingSections.includes(currentSection) ? isListItemInSection : isStep;
-
-            let isCommentBeforeStep = false;
-            if (trimmed.startsWith('#')) {
-                // Look ahead to find the next non-blank, non-comment line
-                for (let j = i + 1; j < lines.length; j++) {
-                    const nextTrimmed = lines[j].trim();
-                    if (nextTrimmed === '') continue;
-                    if (nextTrimmed.startsWith('#')) continue;
-                    const nextIndent = lines[j].length - lines[j].trimStart().length;
-
-                    const nextIsStepWithExpression = /^\s*-\s+\$\{\{.*\}\}:/.test(lines[j]);
-                    if (stepPattern.test(lines[j]) || nextIsStepWithExpression) {
-                        if (
-                            stepSpacingSections.includes(currentSection) ||
-                            (listItemSpacingSections.includes(currentSection) && (nextIndent === 0 || nextIndent === 2))
-                        ) {
-                            isCommentBeforeStep = true;
-                        }
-                    } else if (
-                        listItemSpacingSections.includes(currentSection) &&
-                        /^\s*-\s+/.test(lines[j]) &&
-                        (nextIndent === 0 || nextIndent === 2)
-                    ) {
-                        isCommentBeforeStep = true;
-                    }
-                    break;
+            if (trimmed === 'steps:' || trimmed === 'jobs:' || trimmed === 'stages:') {
+                if (!line.includes('${{')) {
+                    inListSection = true;
+                    listSectionIndent = lineIndent;
+                }
+            } else if (
+                listSectionIndent >= 0 &&
+                lineIndent <= listSectionIndent &&
+                trimmed &&
+                !trimmed.startsWith('#')
+            ) {
+                // We've outdented past the section
+                if (trimmed !== 'steps:' && trimmed !== 'jobs:' && trimmed !== 'stages:') {
+                    inListSection = false;
+                    listSectionIndent = -1;
                 }
             }
 
-            const hadPreviousAtSameIndent = lastListItemAtIndent.has(lineIndent);
+            // Check if current line is a list item (starts with -)
+            const isListItem = /^\s*-\s+/.test(line);
+            const isConditional = /^\s*-\s+\$\{\{\s*(if|else|elseif|each)\s/.test(line);
 
-            if ((shouldApplySpacing || isCommentBeforeStep) && hadPreviousAtSameIndent && !prevWasCommentBeforeStep) {
-                // Add blank lines for:
-                // 1. Items at indent 0 or 2 (direct children of stages/jobs/steps)
-                // 2. Template items at any indent (they're actual pipeline items, not just nested conditions)
-                // 3. Conditional expressions at indent <= 4 (sibling level conditionals, not nested in parameters)
-                const isTemplateItem = /^\s*-\s+template:/.test(line);
-                const isConditionalExpression = /^\s*-\s+\$\{\{\s*if\s/.test(line) && lineIndent <= 4;
-                if (
-                    (lineIndent <= 2 || isTemplateItem || isConditionalExpression) &&
-                    pass1.length > 0 &&
-                    pass1[pass1.length - 1].trim() !== ''
-                ) {
+            // Check if this is an actual pipeline item (not a parameter, not immediately after conditional)
+            const isPipelineItem =
+                isListItem && !isConditional && (stepPattern.test(line) || /^\s*-\s+\$\{\{.*\}\}:?/.test(line));
+
+            // Conditionals at root level should also get blank lines (they're part of the step flow)
+            const isRootLevelConditional = isConditional && lastStepInStepsSection >= 0;
+
+            // Track variables section
+            if (trimmed === 'variables:' && !line.includes('${{')) {
+                currentVariablesIndent = lineIndent;
+                lastItemInVariablesSection = -1;
+            } else if (
+                currentVariablesIndent >= 0 &&
+                lineIndent < currentVariablesIndent &&
+                trimmed &&
+                !trimmed.startsWith('#')
+            ) {
+                // Exit variables section when we outdent below the variables: line
+                currentVariablesIndent = -1;
+                lastItemInVariablesSection = -1;
+            } else if (
+                currentVariablesIndent >= 0 &&
+                lineIndent === currentVariablesIndent &&
+                trimmed &&
+                !trimmed.startsWith('#') &&
+                !trimmed.startsWith('-')
+            ) {
+                // Also exit if we see another key at the same level (like pool:, steps:, etc.)
+                if (trimmed.endsWith(':') && trimmed !== 'variables:') {
+                    currentVariablesIndent = -1;
+                    lastItemInVariablesSection = -1;
+                }
+            }
+            // Items in variables section are list items (starting with -) at the same indent as variables:
+            const inVariablesSection =
+                currentVariablesIndent >= 0 && lineIndent === currentVariablesIndent && isListItem;
+
+            // Check if previous line was a conditional or section header
+            const prevLine = pass1.length > 0 ? pass1[pass1.length - 1].trim() : '';
+            const prevIsConditional = /^-\s+\$\{\{\s*(if|else|elseif|each)\s/.test(prevLine);
+            const prevIsSectionHeader = prevLine === 'steps:' || prevLine === 'jobs:' || prevLine === 'stages:';
+
+            // Check if we're transitioning from nested step back to lower indent
+            // This handles cases like a step at indent 6 (inside conditional) followed by step at indent 4 (root level)
+            const prevPipelineItemIndent =
+                lastStepInStepsSection >= 0
+                    ? lines[lastStepInStepsSection].length - lines[lastStepInStepsSection].trimStart().length
+                    : -1;
+            const isOutdentingToLowerLevel = isPipelineItem && prevPipelineItemIndent > lineIndent;
+
+            // Add blank line before pipeline items OR root-level conditionals if:
+            // 1. We had a previous pipeline item
+            // 2. We're not right after a section header or conditional
+            // 3. We're not already in a multi-line block (but starting one is OK)
+            // 4. We're not in a variables section
+            const wasAlreadyInMultiLineBlock = inMultiLineBlock && !startsMultiLineBlock;
+
+            if (
+                (isPipelineItem || isRootLevelConditional) &&
+                lastStepInStepsSection >= 0 &&
+                !prevIsSectionHeader &&
+                !prevIsConditional &&
+                !wasAlreadyInMultiLineBlock &&
+                !inVariablesSection
+            ) {
+                if (pass1.length > 0 && pass1[pass1.length - 1].trim() !== '') {
                     pass1.push('');
                 }
             }
 
-            prevWasCommentBeforeStep = isCommentBeforeStep;
-
-            if (shouldApplySpacing) {
-                lastListItemAtIndent.set(lineIndent, i);
-                for (const [indent, _] of lastListItemAtIndent) {
-                    if (indent > lineIndent) lastListItemAtIndent.delete(indent);
-                }
-                prevWasCommentBeforeStep = false;
+            // Update tracker if this is a pipeline item (not conditionals)
+            if (isPipelineItem) {
+                lastStepInStepsSection = i;
+                lastStepIndent = lineIndent;
+            } else if (
+                (trimmed === 'steps:' || trimmed === 'jobs:' || trimmed === 'stages:') &&
+                !line.includes('${{')
+            ) {
+                // Reset when entering a new section
+                lastStepInStepsSection = -1;
+                lastStepIndent = -1;
             }
         }
 
@@ -726,14 +929,14 @@ function applyPipelineFormatting(text, newline, options) {
 
             // Determine blank lines to add:
             // - First main section with parameters: firstBlockBlankLines
-            // - Main sections after the first (when first section was also a main section): 0 (compact)
+            // - Main sections (steps/jobs/stages): always at least 1 blank line
             // - All other cases: betweenSectionBlankLines
             let blankLinesToAdd;
             if (isFirstMainSection) {
                 blankLinesToAdd = options.firstBlockBlankLines;
-            } else if (isMainSection && hasParametersAtStart && parametersEnded && firstSectionWasMainSection) {
-                // Compact subsequent main sections only if the first section was also a main section
-                blankLinesToAdd = 0;
+            } else if (isMainSection) {
+                // Always add at least 1 blank line before steps/jobs/stages
+                blankLinesToAdd = 1;
             } else {
                 blankLinesToAdd = options.betweenSectionBlankLines;
             }
@@ -748,6 +951,58 @@ function applyPipelineFormatting(text, newline, options) {
         }
         if (isRootSection) {
             lastRootSectionIndex = pass1.length;
+        }
+
+        // Ensure at least 1 blank line before jobs: and steps: (at any indent level, not just root)
+        const isJobsOrSteps = trimmed === 'jobs:' || trimmed === 'steps:';
+        if (isJobsOrSteps && lineIndent > 0 && !section2HandledThisLine) {
+            // Check if there's already a blank line before this
+            let hasBlankBefore = false;
+            if (pass1.length > 0 && pass1[pass1.length - 1].trim() === '') {
+                hasBlankBefore = true;
+            }
+
+            // If no blank line exists, add one
+            if (!hasBlankBefore) {
+                pass1.push('');
+            }
+        }
+
+        // Before adding the line, check if we need to add a blank before trailing comments
+        if (trimmed.startsWith('#')) {
+            // Check if this is the start of a trailing comment block
+            let isTrailingComment = true;
+
+            // Look ahead to see if there's any non-comment content after this
+            for (let j = i + 1; j < lines.length; j++) {
+                const futureLine = lines[j].trim();
+                if (futureLine !== '' && !futureLine.startsWith('#')) {
+                    isTrailingComment = false;
+                    break;
+                }
+            }
+
+            if (isTrailingComment) {
+                // Check if there's content before (not just other comments)
+                let hasContentBefore = false;
+                for (let j = pass1.length - 1; j >= 0; j--) {
+                    const prevLine = pass1[j].trim();
+                    if (prevLine !== '' && !prevLine.startsWith('#')) {
+                        hasContentBefore = true;
+                        break;
+                    }
+                }
+
+                if (hasContentBefore) {
+                    // Check if we already have a blank line before this comment
+                    const lastLine = pass1.length > 0 ? pass1[pass1.length - 1] : null;
+                    const needsBlank = lastLine && lastLine.trim() !== '';
+
+                    if (needsBlank) {
+                        pass1.push('');
+                    }
+                }
+            }
         }
 
         // Add non-blank line
@@ -838,8 +1093,14 @@ function formatYaml(content, options = {}) {
             ? { content: content, placeholderMap: new Map() }
             : replaceTemplateExpressionsWithPlaceholders(content);
 
+        // Temporarily disable block scalar protection - it's breaking bash scripts
+        // TODO: Fix the block scalar protection to handle complex bash content
+        // const { content: scalarProtectedContent, scalarMap } = protectBlockScalars(preprocessedContent);
+        const scalarProtectedContent = preprocessedContent;
+        const scalarMap = new Map();
+
         // Protect empty values from being formatted
-        const { content: protectedContent, commentMap } = protectEmptyValues(preprocessedContent);
+        const { content: protectedContent, commentMap } = protectEmptyValues(scalarProtectedContent);
 
         // Parse with comment preservation using yaml package
         // Set strict: false to allow duplicate keys and other issues
@@ -884,6 +1145,9 @@ function formatYaml(content, options = {}) {
             blockQuote: true, // Use block quotes for multi-line scalars
             defaultStringType: 'PLAIN', // Default to plain strings (unquoted)
         });
+
+        // Restore block scalars from placeholders
+        result = restoreBlockScalars(result, scalarMap);
 
         // Restore template expressions from placeholders
         result = restoreTemplateExpressions(result, placeholderMap);

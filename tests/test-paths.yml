@@ -3,6 +3,7 @@ paths:
   - docs/*
   - README.md
   - '*.txt'
+
 variables:
   vmImage: $(vmImage)
   buildConfig: Release

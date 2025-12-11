@@ -12,6 +12,7 @@ steps:
   displayName: Initialize Build
 
 # Execute pre-build steps passed as parameter
+
 - ${{ each step in parameters.preSteps }}:
   - ${{ step }}
 

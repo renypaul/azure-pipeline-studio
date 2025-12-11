@@ -1,0 +1,30 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  projectRoot: ./src
+
+stages:
+- stage: Build
+
+  jobs:
+  - template: templates/build-job.yml
+    parameters:
+      buildConfiguration: Release
+      projectPath: $(projectRoot)
+      # timeoutInMinutes: '60' # This would trigger a type warning if uncommented (string vs number)
+      runTests: true
+
+- stage: Deploy
+  dependsOn: Build
+
+  jobs:
+  - template: templates/deploy-job.yml
+    parameters:
+      environmentName: Production
+      # Missing required parameter 'strategy' will use default

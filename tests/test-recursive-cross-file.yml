@@ -13,13 +13,16 @@ parameters:
   - name: worker
     version: '3.11'
     repo: worker-service
+
 variables:
   # Global template expressions that should not leak into parameters
   pythonVersion: $(pythonVersion)
   nodeVersion: $(nodeVersion)
   deployVersion: $(Build.BuildNumber)
+
 stages:
 - stage: BuildServices
+
   jobs:
   - ${{ each service in parameters.serviceMatrix }}:
     - job: Build_${{ service.name }}
@@ -43,6 +46,7 @@ stages:
 
 - stage: DeployServices
   dependsOn: BuildServices
+
   jobs:
   - job: DeployMatrix
     strategy:
@@ -76,6 +80,7 @@ stages:
         pythonVersion: '3.10'
 
 - stage: Verification
+
   jobs:
   - job: VerifyDeployment
     steps:
@@ -93,6 +98,7 @@ stages:
           print(f"Python {version}")
         # This literal should remain unchanged
         pythonInterpreter: '3.10'
+
     - template: /steps/health-check.yaml
       parameters:
         services:

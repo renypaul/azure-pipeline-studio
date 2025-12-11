@@ -14,7 +14,7 @@ parameters:
 - name: buildMode
   type: string
   default: release
-  values: [debug, release]
+  values: [ debug, release ]
 
 
 variables:
@@ -26,9 +26,12 @@ variables:
   ${{ else }}:
     buildConfiguration: Release
     enableCodeCoverage: false
+
+
 stages:
 - stage: BuildAndTest
   displayName: Build and Test Application
+
   jobs:
   - job: Build
     displayName: Build ${{ parameters.buildMode }} configuration
@@ -42,6 +45,7 @@ stages:
         solution: $(solution)
         platform: $(buildPlatform)
         configuration: $(buildConfiguration)
+
     - ${{ if eq(parameters.buildMode, 'debug') }}:
       - task: VSTest@2
         displayName: Run Unit Tests with Coverage
@@ -57,6 +61,7 @@ stages:
           configuration: $(buildConfiguration)
 
 # Deploy to each environment
+
 - ${{ each env in parameters.deployEnvironments }}:
   - stage: Deploy_${{ env.name }}
     displayName: Deploy to ${{ env.name }} (${{ env.region }})
@@ -82,6 +87,7 @@ stages:
                 ResourceGroupName: rg-${{ env.name }}
                 SlotName: staging
     # Run tests if enabled for this environment  
+
     - ${{ if eq(env.runTests, true) }}:
       - job: PostDeploymentTests
         displayName: Post-deployment tests for ${{ env.name }}

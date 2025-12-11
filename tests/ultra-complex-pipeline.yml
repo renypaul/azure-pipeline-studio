@@ -1,23 +1,26 @@
 name: Complex Azure Pipeline
+
 trigger:
   branches:
-    include: [main, develop]
-    exclude: [feature/*, bugfix/*]
+    include: [ main, develop ]
+    exclude: [ feature/*, bugfix/* ]
   tags:
-    include: [v*, release-*]
+    include: [ v*, release-* ]
   paths:
-    include: [src/**, tests/**]
-    exclude: [docs/**, '*.md']
+    include: [ src/**, tests/** ]
+    exclude: [ docs/**, '*.md' ]
+
 parameters:
 - name: environment
   displayName: Target Environment
   type: string
   default: dev
-  values: [dev, staging, prod]
+  values: [ dev, staging, prod ]
 - name: runTests
   displayName: Run Tests
   type: boolean
   default: true
+
 variables:
 - group: global-variables
 - group: $(environment)-variables
@@ -34,6 +37,7 @@ variables:
 - ${{ else }}:
   - name: deploymentSlot
     value: staging
+
 resources:
   repositories:
   - repository: templates
@@ -44,6 +48,7 @@ resources:
     type: github
     endpoint: github-connection
     name: microsoft/azure-pipelines-tasks
+
 extends:
   template: templates/base-pipeline.yml@templates
   parameters:

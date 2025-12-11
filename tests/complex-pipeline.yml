@@ -7,17 +7,21 @@ trigger:
     exclude:
     - docs/*
     - README.md
+
 variables:
 - group: production-vars
 - name: buildConfiguration
   value: Release
 - name: vmImage
   value: ubuntu-latest
+
 pool:
   vmImage: $(vmImage)
+
 stages:
 - stage: Build
   displayName: Build and Test
+
   jobs:
   - job: BuildJob
     displayName: Build Application
@@ -34,6 +38,7 @@ stages:
         echo "Building application"
         dotnet build --configuration $(buildConfiguration)
       displayName: Build Solution
+
     - ${{ if eq(variables.buildConfiguration, 'Release') }}:
       - task: DotNetCoreCLI@2
         displayName: Run Tests

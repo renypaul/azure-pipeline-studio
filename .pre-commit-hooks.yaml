@@ -4,7 +4,7 @@
   entry: azure-pipeline-formatter
   language: node
   language_version: 20.9.0
-  types: [yaml]
+  types: [ yaml ]
   pass_filenames: true
   require_serial: false
   additional_dependencies: []

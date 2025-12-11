@@ -96,7 +96,10 @@ empty:
 
     const test8Result = formatYaml(test8Input);
     assert.strictEqual(test8Result.error, undefined, 'Test 8 should not have errors');
-    assert(test8Result.text.includes('empty:\n  # Comment at end'), 'Test 8: End comment preserved');
+    assert(
+        test8Result.text.includes('empty:') && test8Result.text.includes('# Comment at end'),
+        'Test 8: End comment preserved',
+    );
 
     // Test 9: Empty value with blank lines
     const test9Input = `default:

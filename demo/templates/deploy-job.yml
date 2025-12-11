@@ -1,0 +1,17 @@
+parameters:
+- name: environmentName
+  type: string
+- name: strategy
+  type: object
+  default:
+    runOnce:
+      deploy:
+        steps:
+        - script: echo Deploying...
+
+
+jobs:
+- deployment: Deploy
+  displayName: Deploy to ${{ parameters.environmentName }}
+  environment: ${{ parameters.environmentName }}
+  strategy: ${{ parameters.strategy }}

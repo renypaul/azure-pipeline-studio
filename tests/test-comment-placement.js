@@ -50,14 +50,14 @@ runTest(
 runTest(
     'Nested keys with comments',
     'stages:\n- stage: A\n  jobs:\n  # Job list\n  - job: Build',
-    'stages:\n- stage: A\n  jobs:\n  # Job list\n  - job: Build',
+    'stages:\n- stage: A\n\n  jobs:\n  # Job list\n  - job: Build',
 );
 
 // Test 4: Nested inline comments move to separate line (yaml library behavior)
 runTest(
     'Nested inline comments move to separate line',
     'stages:\n- stage: A\n  jobs: # Job list\n  - job: Build',
-    'stages:\n- stage: A\n  jobs:\n  # Job list\n  - job: Build',
+    'stages:\n- stage: A\n\n  jobs:\n  # Job list\n  - job: Build',
 );
 
 // Test 5: Mixed comments - inline comments move to separate line (yaml library behavior)

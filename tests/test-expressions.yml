@@ -1,5 +1,6 @@
 name: Azure DevOps Expressions Test
 # Compile-time expressions with literals
+
 variables:
   someBoolean: ${{ true }}
   someNumber: ${{ -1.2 }}
@@ -9,11 +10,13 @@ variables:
   isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
   compileVar: ${{ variables.staticVar }}
 # Function expressions
+
 parameters:
 - name: environment
   type: string
   default: dev
 # Conditional expressions
+
 variables:
 - ${{ if eq(parameters.environment, 'prod') }}:
   - name: deploymentSlot
@@ -32,10 +35,12 @@ variables:
   - name: deploy_${{ env }}
     value: ${{ env }}
 # Complex function expressions
+
 stages:
 
 - stage: Build
   condition: ${{ and(succeeded(), eq(variables.runTests, 'true')) }}
+
   jobs:
   - job: BuildJob
     condition: $[or(eq(variables['Build.Reason'], 'IndividualCI'), contains(variables['Build.SourceBranch'], 'feature/'))]

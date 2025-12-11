@@ -4,8 +4,10 @@ trigger:
     include:
     - main
     - develop
+
 stages:
 - stage: Build
+
   jobs:
   - job: BuildJob
     steps:

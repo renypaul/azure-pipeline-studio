@@ -7,10 +7,12 @@ parameters:
 
 stages:
 - stage: Deploy
+
   jobs:
   - job:
     steps:
     - task: AzureCLI@2
       inputs:
         azureSubscription: mySubscription
+
     - template: /templates/deploy.yaml

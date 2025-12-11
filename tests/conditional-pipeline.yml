@@ -11,22 +11,27 @@ parameters:
   default: true
 - name: environments
   type: object
-  default: [dev, staging, prod]
+  default: [ dev, staging, prod ]
 
 
 trigger:
 - main
+
 pool:
   vmImage: ubuntu-latest
+
 variables:
   buildConfiguration: Release
   ${{ if eq(parameters.environment, 'prod') }}:
     deploymentStrategy: blue-green
   ${{ else }}:
     deploymentStrategy: rolling
+
+
 stages:
 - stage: Build
   displayName: Build Stage
+
   jobs:
   - job: BuildJob
     displayName: Build Application

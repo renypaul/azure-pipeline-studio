@@ -5,6 +5,26 @@ All notable changes to Azure Pipeline Studio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-12-11
+
+### Added
+- Enhanced template parameter validation with type checking (string, number, boolean, object, step, stepList, stage, stageList, job, jobList, deployment, deploymentList)
+- Added validation for allowed parameter values when `values` array is defined
+- Template stack tracking for better error reporting in nested template calls
+- Comprehensive idempotency test suite for real-world pipeline files
+- Test coverage for multi-line block blank line handling
+- Test coverage for trailing comments formatting behavior
+- Updated menu screenshot showing context menu options
+- Enhanced demo pipeline with build and deploy job examples
+
+### Fixed
+- Fixed formatter idempotency issues with blank lines in steps sections
+- Resolved trailing comments spacing that was adding extra blank lines on each format pass
+- Fixed blank line handling in multi-line blocks (bash: |, script: |) to prevent oscillation
+- Improved trailing comments rule to ensure exactly one blank line before EOF comments
+
+[1.0.2]: https://github.com/HPInc/azure-pipeline-studio/releases/tag/v1.0.2
+
 ## [1.0.1] - 2025-12-09
 
 ### Added

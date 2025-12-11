@@ -266,7 +266,14 @@ class AzurePipelineParser {
     expandPipelineFromFile(filePath, overrides = {}) {
         const input = fs.readFileSync(filePath, 'utf8');
         const baseDir = path.dirname(filePath);
-        return this.expandPipelineToString(input, { ...overrides, fileName: filePath, baseDir });
+        // Initialize template stack with root file
+        const enhancedOverrides = {
+            ...overrides,
+            fileName: filePath,
+            baseDir,
+            templateStack: [filePath],
+        };
+        return this.expandPipelineToString(input, enhancedOverrides);
     }
 
     expandPipelineToString(sourceText, overrides = {}) {
@@ -351,6 +358,7 @@ class AzurePipelineParser {
             baseDir,
             repositoryBaseDir,
             resourceLocations,
+            templateStack: overrides.templateStack || [],
         };
     }
 
@@ -594,7 +602,7 @@ class AzurePipelineParser {
         return result;
     }
 
-    validateTemplateParameters(templateDocument, providedParameters, templatePath) {
+    validateTemplateParameters(templateDocument, providedParameters, templatePath, context) {
         if (!templateDocument || typeof templateDocument !== 'object') {
             return;
         }
@@ -605,6 +613,9 @@ class AzurePipelineParser {
         }
 
         const missingRequired = [];
+        const invalidValues = [];
+        const typeErrors = [];
+        const unknownParameters = [];
 
         const checkParameter = (param, paramName) => {
             if (!param || typeof param !== 'object') {
@@ -621,10 +632,113 @@ class AzurePipelineParser {
 
             // Check if parameter was provided
             const wasProvided = providedParameters && Object.prototype.hasOwnProperty.call(providedParameters, name);
+            const providedValue = wasProvided ? providedParameters[name] : undefined;
 
             // If no default and not provided, it's missing
             if (!hasDefault && !wasProvided) {
                 missingRequired.push(name);
+            }
+
+            // Validate parameter type if provided
+            if (wasProvided && param.type !== undefined) {
+                const paramType = param.type.toLowerCase();
+                const actualValue = providedValue;
+
+                // Skip type validation if value contains runtime variable references
+                // Matches: $(var) or patterns like $(var1)-$(var2)-$(var3)
+                const isRuntimeVariable = typeof actualValue === 'string' && /\$\([^)]+\)/.test(actualValue);
+
+                // Skip validation for undefined values (e.g., from ${{ variables.X }} expressions)
+                // These will be resolved at pipeline runtime
+                const isUndefinedRuntime = actualValue === undefined;
+
+                if (!isRuntimeVariable && !isUndefinedRuntime) {
+                    let typeValid = true;
+                    let expectedType = param.type;
+
+                    switch (paramType) {
+                        case 'string':
+                            // Accept strings, numbers (will be converted to string), and booleans
+                            typeValid =
+                                typeof actualValue === 'string' ||
+                                typeof actualValue === 'number' ||
+                                typeof actualValue === 'boolean';
+                            break;
+                        case 'number':
+                            // Accept numbers and numeric strings
+                            if (typeof actualValue === 'number') {
+                                typeValid = true;
+                            } else if (typeof actualValue === 'string') {
+                                typeValid = !isNaN(actualValue) && !isNaN(parseFloat(actualValue));
+                            } else {
+                                typeValid = false;
+                            }
+                            break;
+                        case 'boolean':
+                            // Accept booleans and boolean-like strings
+                            if (typeof actualValue === 'boolean') {
+                                typeValid = true;
+                            } else if (typeof actualValue === 'string') {
+                                const lower = actualValue.toLowerCase();
+                                typeValid = lower === 'true' || lower === 'false';
+                            } else {
+                                typeValid = false;
+                            }
+                            break;
+                        case 'object':
+                            // In Azure DevOps, 'object' type accepts both objects and arrays
+                            typeValid = typeof actualValue === 'object' && actualValue !== null;
+                            break;
+                        case 'step':
+                        case 'steplist':
+                            typeValid = Array.isArray(actualValue);
+                            expectedType = 'array (stepList)';
+                            break;
+                        case 'job':
+                        case 'joblist':
+                            typeValid = Array.isArray(actualValue);
+                            expectedType = 'array (jobList)';
+                            break;
+                        case 'deployment':
+                        case 'deploymentlist':
+                            typeValid = Array.isArray(actualValue);
+                            expectedType = 'array (deploymentList)';
+                            break;
+                        case 'stage':
+                        case 'stagelist':
+                            typeValid = Array.isArray(actualValue);
+                            expectedType = 'array (stageList)';
+                            break;
+                        default:
+                            // Unknown type, skip validation
+                            typeValid = true;
+                    }
+
+                    if (!typeValid) {
+                        typeErrors.push({
+                            name,
+                            expected: expectedType,
+                            actual: typeof actualValue,
+                            value: actualValue,
+                        });
+                    }
+                }
+            }
+
+            // Validate allowed values if provided
+            if (wasProvided && param.values && Array.isArray(param.values)) {
+                const actualValue = providedValue;
+
+                // Skip validation for runtime variables
+                const isRuntimeVariable = typeof actualValue === 'string' && /\$\([^)]+\)/.test(actualValue);
+
+                if (!isRuntimeVariable && !param.values.includes(actualValue)) {
+                    invalidValues.push({
+                        name,
+                        value: actualValue,
+                        allowed: param.values,
+                    });
+                }
             }
         };
 
@@ -638,13 +752,89 @@ class AzurePipelineParser {
             }
         }
 
+        // Check for unknown parameters (parameters provided but not defined in template)
+        if (providedParameters && typeof providedParameters === 'object') {
+            const definedParams = new Set();
+
+            if (Array.isArray(parameters)) {
+                for (const param of parameters) {
+                    if (param && param.name) {
+                        definedParams.add(param.name);
+                    }
+                }
+            } else if (typeof parameters === 'object') {
+                for (const name of Object.keys(parameters)) {
+                    definedParams.add(name);
+                }
+            }
+
+            for (const providedName of Object.keys(providedParameters)) {
+                // Skip empty string keys (from ${{ insert }}: syntax)
+                if (providedName === '') {
+                    continue;
+                }
+                if (!definedParams.has(providedName)) {
+                    unknownParameters.push(providedName);
+                }
+            }
+        }
+
+        // Report errors
+        const errors = [];
+
         if (missingRequired.length > 0) {
             const templateName = templatePath || 'template';
             const paramList = missingRequired.map((p) => `'${p}'`).join(', ');
-            throw new Error(
+            errors.push(
                 `Missing required parameter(s) for template '${templateName}': ${paramList}. ` +
                     `These parameters do not have default values and must be provided when calling the template.`,
             );
+        }
+
+        if (typeErrors.length > 0) {
+            const templateName = templatePath || 'template';
+            const errorDetails = typeErrors
+                .map(
+                    (err) =>
+                        `Parameter '${err.name}' expects type '${err.expected}' but received '${err.actual}' (value: ${JSON.stringify(err.value)})`,
+                )
+                .join('\n    ');
+            errors.push(`Invalid parameter type(s) for template '${templateName}':\n    ${errorDetails}`);
+        }
+
+        if (invalidValues.length > 0) {
+            const templateName = templatePath || 'template';
+            const errorDetails = invalidValues
+                .map(
+                    (err) =>
+                        `Parameter '${err.name}' has value '${err.value}' which is not in allowed values: [${err.allowed.join(', ')}]`,
+                )
+                .join('\n    ');
+            errors.push(`Invalid parameter value(s) for template '${templateName}':\n    ${errorDetails}`);
+        }
+
+        if (unknownParameters.length > 0) {
+            const templateName = templatePath || 'template';
+            const paramList = unknownParameters.map((p) => `'${p}'`).join(', ');
+            errors.push(
+                `Unknown parameter(s) for template '${templateName}': ${paramList}. ` +
+                    `These parameters are not defined in the template.`,
+            );
+        }
+
+        if (errors.length > 0) {
+            let errorMessage = errors.join('\n\n');
+
+            // Add template call stack if available
+            if (context && context.templateStack && context.templateStack.length > 0) {
+                errorMessage += '\n  Template call stack:';
+                errorMessage += '\n    ' + context.templateStack[0];
+                for (let i = 1; i < context.templateStack.length; i++) {
+                    errorMessage += '\n    ' + '  '.repeat(i) + '└── ' + context.templateStack[i];
+                }
+            }
+
+            throw new Error(errorMessage);
         }
     }
 
@@ -1941,6 +2131,7 @@ class AzurePipelineParser {
             repositoryBaseDir:
                 options.repositoryBaseDir !== undefined ? options.repositoryBaseDir : parent.repositoryBaseDir,
             resourceLocations: parent.resourceLocations || {},
+            templateStack: parent.templateStack || [],
         };
     }
 
@@ -2061,8 +2252,19 @@ class AzurePipelineParser {
         const defaultParameters = this.extractParameters(templateDocument);
         const providedParameters = this.normalizeTemplateParameters(node.parameters, context);
 
+        // Build template path for error messages
+        const templateDisplayPath = repositoryRef
+            ? `${repositoryRef.templatePath}@${repositoryRef.repository}`
+            : templatePathValue;
+
+        // Update context with template stack for error reporting
+        const updatedContext = {
+            ...context,
+            templateStack: [...(context.templateStack || []), templateDisplayPath],
+        };
+
         // Validate that all required parameters (without defaults) are provided
-        this.validateTemplateParameters(templateDocument, providedParameters, templatePathValue);
+        this.validateTemplateParameters(templateDocument, providedParameters, templatePathValue, updatedContext);
 
         const mergedParameters = { ...defaultParameters, ...providedParameters };
 
@@ -2105,7 +2307,7 @@ class AzurePipelineParser {
             }
         }
 
-        const templateContext = this.createTemplateContext(context, mergedParameters, templateBaseDir, {
+        const templateContext = this.createTemplateContext(updatedContext, mergedParameters, templateBaseDir, {
             repositoryBaseDir: repositoryBaseDirectoryForContext,
         });
 

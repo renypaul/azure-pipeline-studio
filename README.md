@@ -1,5 +1,7 @@
 # Azure Pipeline Studio
 
+![Menu](images/menu.png)
+
 VS Code extension and CLI tool for formatting and expanding Azure DevOps YAML pipelines with complete expression support.
 
 ## Features

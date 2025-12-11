@@ -9,8 +9,10 @@ parameters:
 - name: nodeVersion
   type: string
   default: 18.x
+
 stages:
 - stage: Build
+
   jobs:
   - job: SetupEnvironment
     steps:
@@ -19,6 +21,7 @@ stages:
         # This literal version should NOT be replaced with $(version) below
         version: '3.10'
         displayName: Setup Python
+
     - template: /templates/node-setup.yaml
       parameters:
         # This literal should stay as-is
@@ -31,6 +34,7 @@ stages:
 
 - stage: Deploy
   dependsOn: Build
+
   jobs:
   - job: DeployService
     strategy:
@@ -59,6 +63,7 @@ stages:
       displayName: Deploy Service
 
 - stage: Integration
+
   jobs:
   - job: RunTests
     steps:
@@ -84,6 +89,7 @@ stages:
 
 # Edge case: Same key at multiple indentation levels
 - stage: ComplexNesting
+
   jobs:
   - job: NestedJob
     steps:

@@ -115,7 +115,7 @@ steps:
         `Expected 2 blank lines before 'stages:' (first occurrence), got ${blankCountStages}`,
     );
 
-    // Check jobs (should NOT have blank lines - not the first occurrence)
+    // Check jobs (formatter adds 1 blank line for nested sections)
     const jobsIndex = lines.findIndex((l) => l.trim() === 'jobs:');
     let blankCountJobs = 0;
     for (let i = jobsIndex - 1; i >= 0 && lines[i].trim() === ''; i--) {
@@ -123,11 +123,11 @@ steps:
     }
     assert.strictEqual(
         blankCountJobs,
-        0,
-        `Expected 0 blank lines before 'jobs:' (not first occurrence), got ${blankCountJobs}`,
+        1,
+        `Expected 1 blank line before 'jobs:' (nested section spacing), got ${blankCountJobs}`,
     );
 
-    // Check steps (should NOT have blank lines - not the first occurrence)
+    // Check steps (formatter adds 1 blank line for nested sections)
     const stepsIndex = lines.findIndex((l) => l.trim() === 'steps:');
     let blankCountSteps = 0;
     for (let i = stepsIndex - 1; i >= 0 && lines[i].trim() === ''; i--) {
@@ -135,8 +135,8 @@ steps:
     }
     assert.strictEqual(
         blankCountSteps,
-        0,
-        `Expected 0 blank lines before 'steps:' (not first occurrence), got ${blankCountSteps}`,
+        1,
+        `Expected 1 blank line before 'steps:' (nested section spacing), got ${blankCountSteps}`,
     );
 
     console.log('✓ firstBlockBlankLines applies to FIRST section only test passed');

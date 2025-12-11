@@ -8,8 +8,10 @@ variables:
   value: $(Agent.BuildDirectory)/temp/folder
 - name: localPathNoVar
   value: C:\Windows\System32
+
 stages:
 - stage: Build
+
   jobs:
   - job: Test
     steps:

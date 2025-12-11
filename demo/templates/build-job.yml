@@ -1,0 +1,29 @@
+parameters:
+- name: buildConfiguration
+  type: string
+  default: Release
+  values:
+  - Debug
+  - Release
+- name: projectPath
+  type: string
+- name: timeoutInMinutes
+  type: number
+  default: 60
+- name: runTests
+  type: boolean
+  default: true
+
+
+jobs:
+- job: Build
+  displayName: Build ${{ parameters.buildConfiguration }}
+  timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+
+  steps:
+  - script: echo Building ${{ parameters.projectPath }} in ${{ parameters.buildConfiguration }} mode
+    displayName: Run Build
+
+  - ${{ if eq(parameters.runTests, true) }}:
+    - script: echo Running Tests...
+      displayName: Run Tests

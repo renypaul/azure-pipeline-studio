@@ -2,8 +2,10 @@
 resources:
   repositories:
   - repository: self
+
 stages:
 - stage: Build
+
   jobs:
   - job: BuildJob
     steps:

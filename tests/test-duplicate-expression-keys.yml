@@ -12,6 +12,7 @@ parameters:
 
 stages:
 - stage: Build
+
   jobs:
   - template: /templates/build.yaml
     parameters:

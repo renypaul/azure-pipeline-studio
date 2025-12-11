@@ -1,8 +1,10 @@
 variables:
   var1: value1
   var2: value2
+
 jobs:
 - job: Build
+
   steps:
   - ${{ if eq(variables['var1'], 'value1') }}:
     - script: echo Building

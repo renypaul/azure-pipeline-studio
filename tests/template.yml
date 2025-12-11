@@ -1,6 +1,8 @@
 jobs:
 - job: TemplateJob
+
   steps:
   - script: echo Template Step
+
 variables:
   templateVar: templateValue

@@ -14,6 +14,17 @@ function test(name, fn) {
     }
 }
 
+function expectError(fn, pattern) {
+    try {
+        fn();
+        throw new Error('Expected error but none was thrown');
+    } catch (error) {
+        if (pattern && !pattern.test(error.message)) {
+            throw new Error(`Error message "${error.message}" does not match pattern ${pattern}`);
+        }
+    }
+}
+
 const parser = new AzurePipelineParser();
 
 // Test 1: Missing required parameter should throw error
@@ -217,3 +228,162 @@ test('Parameter with default null is not required', () => {
 });
 
 console.log('\n✅ All parameter validation tests passed');
+
+// Type validation tests
+test('Type validation - string type accepts string', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'string' }],
+    };
+    const provided = { myParam: 'hello' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - number type rejects non-numeric string', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'number' }],
+    };
+    const provided = { myParam: 'not-a-number' };
+    expectError(() => parser.validateTemplateParameters(template, provided, 'test.yaml'), /type.*number/i);
+});
+
+test('Type validation - number type accepts numeric string', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'number' }],
+    };
+    const provided = { myParam: '123' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - boolean type accepts "true" string', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'boolean' }],
+    };
+    const provided = { myParam: 'true' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - boolean type rejects invalid string', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'boolean' }],
+    };
+    const provided = { myParam: 'yes' };
+    expectError(() => parser.validateTemplateParameters(template, provided, 'test.yaml'), /type.*boolean/i);
+});
+
+test('Type validation - object type accepts object', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'object' }],
+    };
+    const provided = { myParam: { key: 'value' } };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - object type accepts array (Azure DevOps behavior)', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'object' }],
+    };
+    const provided = { myParam: [1, 2, 3] };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - stepList type accepts array', () => {
+    const template = {
+        parameters: [{ name: 'mySteps', type: 'stepList' }],
+    };
+    const provided = { mySteps: [{ script: 'echo hello' }] };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - runtime variable skips type check', () => {
+    const template = {
+        parameters: [{ name: 'myParam', type: 'number' }],
+    };
+    const provided = { myParam: '$(buildNumber)' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Type validation - invalid timeoutInMinutes string is caught', () => {
+    const template = {
+        parameters: [{ name: 'timeoutInMinutes', type: 'number' }],
+    };
+    const provided = { timeoutInMinutes: 'x70' };
+    expectError(() => parser.validateTemplateParameters(template, provided, 'test.yaml'), /type.*number/i);
+});
+
+// Allowed values validation tests
+test('Allowed values - valid value passes', () => {
+    const template = {
+        parameters: [{ name: 'environment', type: 'string', values: ['dev', 'test', 'prod'] }],
+    };
+    const provided = { environment: 'dev' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+test('Allowed values - invalid value throws error', () => {
+    const template = {
+        parameters: [{ name: 'environment', type: 'string', values: ['dev', 'test', 'prod'] }],
+    };
+    const provided = { environment: 'staging' };
+    expectError(() => parser.validateTemplateParameters(template, provided, 'test.yaml'), /allowed values/i);
+});
+
+test('Allowed values - runtime variable skips validation', () => {
+    const template = {
+        parameters: [{ name: 'environment', type: 'string', values: ['dev', 'test', 'prod'] }],
+    };
+    const provided = { environment: '$(envName)' };
+    parser.validateTemplateParameters(template, provided, 'test.yaml');
+});
+
+console.log('\n✅ All tests passed!\n');
+
+// Test 11: Unknown parameter passed to template
+try {
+    const templateWithParams = {
+        parameters: [
+            { name: 'param1', type: 'string' },
+            { name: 'param2', type: 'number' },
+        ],
+    };
+    const providedParams = {
+        param1: 'value1',
+        param2: 42,
+        unknownParam: 'should not be here',
+    };
+    parser.validateTemplateParameters(templateWithParams, providedParams, '/test/template.yaml');
+    console.log('❌ Test 11 FAILED: Should have thrown error for unknown parameter');
+    process.exit(1);
+} catch (e) {
+    if (e.message.includes('Unknown parameter') && e.message.includes('unknownParam')) {
+        console.log('✅ Test 11 PASSED: Unknown parameter detected');
+    } else {
+        console.log('❌ Test 11 FAILED: Wrong error message:', e.message);
+        process.exit(1);
+    }
+}
+
+// Test 12: Multiple unknown parameters
+try {
+    const templateWithParams = {
+        parameters: {
+            validParam: { type: 'string' },
+        },
+    };
+    const providedParams = {
+        validParam: 'value',
+        unknown1: 'bad',
+        unknown2: 'also bad',
+    };
+    parser.validateTemplateParameters(templateWithParams, providedParams, '/test/template.yaml');
+    console.log('❌ Test 12 FAILED: Should have thrown error for unknown parameters');
+    process.exit(1);
+} catch (e) {
+    if (e.message.includes('Unknown parameter') && e.message.includes('unknown1') && e.message.includes('unknown2')) {
+        console.log('✅ Test 12 PASSED: Multiple unknown parameters detected');
+    } else {
+        console.log('❌ Test 12 FAILED: Wrong error message:', e.message);
+        process.exit(1);
+    }
+}
+
+console.log('\n🎉 All 12 tests passed!');

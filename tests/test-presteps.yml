@@ -3,14 +3,17 @@ resources:
   - repository: self
     type: git
     name: MyProject/MyRepo
+
 variables:
 - name: buildConfiguration
   value: Release
 - name: targetEnvironment
   value: production
+
 stages:
 - stage: Build
   displayName: Build Stage
+
   jobs:
   - job: BuildJob
     displayName: Build Job
