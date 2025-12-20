@@ -6,7 +6,7 @@ trigger:
     include:
     # Main production branch
     - main
-    # Development branch for testing  
+    # Development branch for testing
     - develop
     # Feature branches
     - feature/*
@@ -33,6 +33,7 @@ stages:
     displayName: Build Application
     pool:
       vmImage: ubuntu-latest
+
     steps:
     # Install .NET SDK
     - task: UseDotNet@2
@@ -155,6 +156,7 @@ stages:
     strategy:
       runOnce:
         deploy:
+
           steps:
           # Download build artifacts
           - download: current

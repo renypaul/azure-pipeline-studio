@@ -27,6 +27,7 @@ stages:
 
   jobs:
   - job: BuildJob
+
     steps:
     - task: DotNetCoreCLI@2
       inputs:
@@ -37,8 +38,10 @@ stages:
   - stage: Test
     displayName: Test Application
     dependsOn: Build
+
     jobs:
     - job: TestJob
+
       steps:
       - task: DotNetCoreCLI@2
         inputs:
@@ -51,8 +54,10 @@ stages:
     displayName: Deploy to ${{ region }}
     dependsOn:
     - Build
+
     - ${{ if eq(parameters.runTests, true) }}:
       - Test
+
     jobs:
     - deployment: DeployToRegion
       displayName: Deploy to ${{ region }}
@@ -60,6 +65,7 @@ stages:
       strategy:
         runOnce:
           deploy:
+
             steps:
             - task: AzureWebApp@1
               inputs:

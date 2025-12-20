@@ -31,6 +31,7 @@ stages:
         # Template expressions specific to this job
         version: $(version)
         tag: $(tag)
+
       steps:
       - template: /steps/build-python-service.yaml
         parameters:
@@ -39,6 +40,7 @@ stages:
           pythonVersion: ${{ service.version }}
           serviceName: ${{ service.name }}
           repository: ${{ service.repo }}
+
       - script: |
           echo "Building ${{ service.name }}"
           echo "Python version: ${{ service.version }}"
@@ -66,6 +68,7 @@ stages:
       serviceVersion: $(version)
       deploymentTag: $(tag)
       buildNumber: $(Build.BuildNumber)
+
     steps:
     - template: /steps/deploy-service.yaml
       parameters:
@@ -83,12 +86,14 @@ stages:
 
   jobs:
   - job: VerifyDeployment
+
     steps:
     - script: |
         # Verify all services are deployed
         VERSION=$(Build.BuildNumber)
         echo "Verifying build $VERSION"
       displayName: Verify Version
+
     - task: PythonScript@0
       inputs:
         scriptSource: inline

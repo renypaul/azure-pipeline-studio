@@ -43,7 +43,7 @@ class AzurePipelineParser {
         // When azureCompatible=false, use literal style to preserve exact formatting
         // When azureCompatible=true, apply Azure-specific transformations
         const azureCompatible = overrides.azureCompatible || false;
-        console.log(`Azure Pipeline Compatibility Mode: ${azureCompatible}`);
+        console.log(`Azure Compatibility mode: ${azureCompatible}`);
         this.applyBlockScalarStyles(
             yamlDoc.contents,
             scriptsWithExpressions,

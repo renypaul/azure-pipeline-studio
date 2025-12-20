@@ -5,6 +5,18 @@ All notable changes to Azure Pipeline Studio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2025-12-20
+
+### Changed
+- Updated pre-commit configuration to use local repo and WSL path for formatter
+- Improved Node App launch configuration for WSL compatibility
+
+### Fixed
+- Ensured extension-bundle.js is excluded from pre-commit formatting
+- Cleaned up devDependencies and removed unused Babel and loader packages
+
+[1.0.5]: https://github.com/HPInc/azure-pipeline-studio/releases/tag/v1.0.5
+
 ## [1.0.4] - 2025-12-20
 
 ### Changed

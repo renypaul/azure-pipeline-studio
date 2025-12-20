@@ -10,6 +10,7 @@ stages:
 
   jobs:
   - job:
+
     steps:
     - task: AzureCLI@2
       inputs:

@@ -39,14 +39,18 @@ stages:
 
   jobs:
   - job: BuildJob
+
     steps:
     - script: echo "Building..."
+
     - script: echo "Environment is prod"
+
     - script: echo ${{ replace(parameters.version, '.', '_') }}
     # Conditional step using eq()
 
     - ${{ if eq(parameters.environment, 'prod') }}:
       - script: echo "Production build"
+
     - ${{ else }}:
       - script: echo "Non-production build"
     # Using each with string functions
@@ -61,6 +65,7 @@ stages:
   jobs:
   - job: TestJob
     condition: ${{ not(eq(parameters.environment, 'skip')) }}
+
     steps:
     - script: echo "Running tests"
     # Using startsWith() and endsWith()
@@ -77,14 +82,20 @@ stages:
 
   jobs:
   - job: DeployJob
+
     steps:
     - script: echo "Deploying..."
+
     - script: echo prod
+
     - script: echo "Valid environment"
       condition: true
+
     - script: echo "Not a test environment"
       condition: true
+
     - script: echo "Always runs"
       condition: true
+
     - script: echo "Runs if succeeded"
       condition: true

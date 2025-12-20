@@ -33,7 +33,6 @@ variables:
 - ${{ if eq(parameters.environment, 'prod') }}:
   - name: deploymentSlot
     value: production
-
 - ${{ else }}:
   - name: deploymentSlot
     value: staging
@@ -59,6 +58,7 @@ extends:
       condition: succeeded()
       variables:
         artifactName: $(Build.Repository.Name)-$(Build.BuildId)
+
       jobs:
       - job: BuildAndTest
         displayName: Build and Test Application
@@ -72,16 +72,20 @@ extends:
               nodeVersion: 18.x
             Node20:
               nodeVersion: 20.x
+
         steps:
         - checkout: self
           fetchDepth: 0
           clean: true
+
         - checkout: templates
           path: s/templates
+
         - task: NodeTool@0
           displayName: Install Node.js $(nodeVersion)
           inputs:
             versionSpec: $(nodeVersion)
+
         - script: |
             echo "Node version: $(node --version)"
             echo "NPM version: $(npm --version)"
@@ -90,6 +94,7 @@ extends:
             npm ci
             npm run build
           displayName: Install and Build
+
         - ${{ if eq(parameters.runTests, true) }}:
           - script: |
               npm run test:unit
@@ -97,24 +102,29 @@ extends:
               npm run test:e2e
             displayName: Run All Tests
             continueOnError: ${{ eq(parameters.environment, 'dev') }}
+
         - task: PublishTestResults@2
           condition: succeededOrFailed()
           inputs:
             testResultsFormat: JUnit
             testResultsFiles: '**/test-results.xml'
             mergeTestResults: true
+
         - task: PublishCodeCoverageResults@1
           inputs:
             codeCoverageTool: Cobertura
             summaryFileLocation: '**/coverage/cobertura-coverage.xml'
+
         - publish: $(System.DefaultWorkingDirectory)/dist
           artifact: $(artifactName)
           condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+
     - ${{ if ne(parameters.environment, 'dev') }}:
       - stage: Deploy
         displayName: Deploy to ${{ parameters.environment }}
         dependsOn: Build
         condition: succeeded()
+
         jobs:
         - deployment: DeployToEnvironment
           displayName: Deploy Application
@@ -124,9 +134,11 @@ extends:
           strategy:
             runOnce:
               deploy:
+
                 steps:
                 - download: current
                   artifact: $(artifactName)
+
                 - task: AzureWebApp@1
                   displayName: Deploy to Azure Web App
                   inputs:

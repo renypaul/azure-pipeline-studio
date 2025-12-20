@@ -1,5 +1,5 @@
 repos:
-- repo: https://github.com/HPInc/azure-pipeline-studio
+- repo: .
   rev: v1.0.4
   hooks:
   - id: azure-pipeline-formatter
@@ -14,14 +14,14 @@ repos:
     args: [ --write ]
     exclude: ^extension-bundle\.js$
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.12.0
+  rev: v2.15.0
   hooks:
   - id: pretty-format-ini
     args: [ --autofix ]
     types: [ file ]
     files: \.(properties)$
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.5.0
+  rev: v6.0.0
   hooks:
   - id: end-of-file-fixer
     exclude: ^extension-bundle\.js$
@@ -33,7 +33,7 @@ repos:
   - id: check-shebang-scripts-are-executable
   - id: pretty-format-json
     args: [ --autofix ]
-    exclude: ^(.vscode|extension-bundle\.js)$
+    exclude: ^.vscode|^extension-bundle\.js$
   - id: mixed-line-ending
     args: [ --fix=lf ]
 - repo: https://github.com/jumanjihouse/pre-commit-hooks

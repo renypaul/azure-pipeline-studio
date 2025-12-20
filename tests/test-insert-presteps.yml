@@ -8,11 +8,13 @@ stages:
   parameters:
     buildParams:
       stageName: Build
+
       jobs:
       - template: job-template.yml
         parameters:
           jobName: BuildJob
           preSteps:
+
           - template: pre-steps-template.yml@self
             parameters:
               message: Pre-step 1

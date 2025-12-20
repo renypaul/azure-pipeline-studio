@@ -22,11 +22,9 @@
       "skipFiles": [
         "<node_internals>/**"
       ],
-      "program": "${workspaceFolder}/terragrunt.js",
+      "program": "${workspaceFolder}/extension.js",
       "args": [
-        "-a",
-        "-f",
-        "tests/terraform-module/outputs.tf"
+        "tests/test-presteps.yml"
       ]
     }
   ],

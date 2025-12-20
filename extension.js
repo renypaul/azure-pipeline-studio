@@ -13,6 +13,7 @@ try {
     vscode = undefined;
 }
 const { AzurePipelineParser } = require('./parser');
+const { NONAME } = require('dns');
 
 function activate(context) {
     if (!vscode) {
@@ -956,6 +957,7 @@ function runCli(args) {
                 }
                 try {
                     expandedYaml = cliParser.expandPipelineToString(sourceText, parserOptions);
+                    yamlToFormat = expandedYaml;
                 } catch (expandError) {
                     console.error(`[${filePath}] Template expansion failed: ${expandError.message}`);
                     if (argv.debug) {
@@ -974,7 +976,7 @@ function runCli(args) {
                 fileOptions.wasExpanded = true;
             }
 
-            const formatted = formatYaml(expandedYaml || yamlToFormat, fileOptions);
+            const formatted = formatYaml(yamlToFormat, fileOptions);
             if (formatted.error) {
                 console.error(`[${filePath}] ${formatted.error}`);
                 hasErrors = true;
@@ -983,20 +985,21 @@ function runCli(args) {
             if (formatted.warning) {
                 console.warn(`[${filePath}] ${formatted.warning}`);
             }
+            const outputText = formatted.text;
 
             if (argv.output) {
                 const absoluteOutput = path.resolve(process.cwd(), argv.output);
-                fs.writeFileSync(absoluteOutput, formatted.text, 'utf8');
-                if (sourceText !== formatted.text) {
+                fs.writeFileSync(absoluteOutput, outputText, 'utf8');
+                if (sourceText !== outputText) {
                     const action = argv['expand-templates'] ? 'Expanded' : 'Formatted';
                     console.log(`${action} pipeline written to ${absoluteOutput}`);
                 }
             } else if (argv['expand-templates']) {
                 // In expand mode, never modify files in-place - output to console
-                console.log(formatted.text);
+                console.log(outputText);
             } else {
-                if (sourceText !== formatted.text) {
-                    fs.writeFileSync(absolutePath, formatted.text, 'utf8');
+                if (sourceText !== outputText) {
+                    fs.writeFileSync(absolutePath, outputText, 'utf8');
                     console.log(`Formatted ${filePath} (in-place)`);
                 }
             }

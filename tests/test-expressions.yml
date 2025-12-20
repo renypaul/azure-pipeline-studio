@@ -21,11 +21,9 @@ variables:
 - ${{ if eq(parameters.environment, 'prod') }}:
   - name: deploymentSlot
     value: production
-
 - ${{ elseif eq(parameters.environment, 'staging') }}:
   - name: deploymentSlot
     value: staging
-
 - ${{ else }}:
   - name: deploymentSlot
     value: development
@@ -37,22 +35,23 @@ variables:
 # Complex function expressions
 
 stages:
-
 - stage: Build
   condition: ${{ and(succeeded(), eq(variables.runTests, 'true')) }}
 
   jobs:
   - job: BuildJob
     condition: $[or(eq(variables['Build.Reason'], 'IndividualCI'), contains(variables['Build.SourceBranch'], 'feature/'))]
+
     steps:
     - script: echo ${{ format('Hello {0}!', parameters.name) }}
       condition: $[startsWith(variables['Build.SourceBranch'], 'refs/heads/')]
+
     - task: PublishResults@1
       condition: ${{ not(eq(parameters.skipTests, true)) }}
       inputs:
         testResults: $[join(';', parameters.testPaths)]
 
-# Dependencies expressions  
+# Dependencies expressions
 - stage: Deploy
   dependsOn: Build
   condition: $[and(succeeded(), eq(stageDependencies.Build.BuildJob.outputs['setVar.shouldDeploy'], 'true'))]

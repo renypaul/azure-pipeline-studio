@@ -15,6 +15,7 @@ stages:
 
   jobs:
   - job: SetupEnvironment
+
     steps:
     - template: /templates/python-setup.yaml
       parameters:
@@ -27,6 +28,7 @@ stages:
         # This literal should stay as-is
         version: 18.x
         registry: https://registry.npmjs.org
+
     - script: |
         echo "Python version: 3.10"
         echo "Node version: 18.x"
@@ -58,6 +60,7 @@ stages:
       ecrRepo: $(ecrRepo)
       condition: ${{ parameters.condition }}
       runtimeCheck: $[eq(variables.deployEnvironment, 'production')]
+
     steps:
     - script: echo "Deploying $(serviceName) version $(version)"
       displayName: Deploy Service
@@ -66,6 +69,7 @@ stages:
 
   jobs:
   - job: RunTests
+
     steps:
     - task: PythonScript@0
       inputs:
@@ -75,11 +79,13 @@ stages:
           import sys
           print(f"Python {sys.version}")
         pythonVersion: '3.10'
+
     - task: NodeTool@0
       inputs:
         # Another nested literal
         versionSpec: 18.x
         checkLatest: false
+
     - script: |
         # Test with expressions
         VERSION=$(version)
@@ -92,6 +98,7 @@ stages:
 
   jobs:
   - job: NestedJob
+
     steps:
     - template: /templates/complex.yaml
       parameters:
@@ -99,7 +106,7 @@ stages:
           # 14-space indentation
           version: 1.0.0
           settings:
-            # 16-space indentation  
+            # 16-space indentation
             version: 2.0.0
             nested:
               # 18-space indentation

@@ -8,11 +8,15 @@ stages:
 
   jobs:
   - job: BuildJob
+
     steps:
     - checkout: self
+
     - script: echo "Pre-step 1"
       displayName: 'Pre-step: Pre-step 1'
+
     - script: echo "Pre-step 2"
       displayName: 'Pre-step: Pre-step 2'
+
     - script: echo "Building..."
       displayName: Build Step

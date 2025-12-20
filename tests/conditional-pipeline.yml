@@ -35,12 +35,14 @@ stages:
   jobs:
   - job: BuildJob
     displayName: Build Application
+
     steps:
     - task: DotNetCoreCLI@2
       displayName: Restore packages
       inputs:
         command: restore
         projects: '**/*.csproj'
+
     - task: DotNetCoreCLI@2
       displayName: Build application
       inputs:
@@ -52,9 +54,11 @@ stages:
   - stage: Test
     displayName: Test Stage
     dependsOn: Build
+
     jobs:
     - job: TestJob
       displayName: Run Tests
+
       steps:
       - task: DotNetCoreCLI@2
         displayName: Run unit tests
@@ -68,8 +72,10 @@ stages:
     displayName: Deploy to ${{ parameters.environment }}
     dependsOn:
     - Build
+
     - ${{ if eq(parameters.runTests, true) }}:
       - Test
+
     jobs:
     - deployment: DeploymentJob
       displayName: Deploy Application
@@ -77,6 +83,7 @@ stages:
       strategy:
         runOnce:
           deploy:
+
             steps:
             - task: AzureWebApp@1
               displayName: Deploy to Azure Web App
@@ -91,9 +98,11 @@ stages:
   - stage: Notify_${{ env }}
     displayName: Notify ${{ env }} team
     condition: and(succeeded(), eq('${{ parameters.environment }}', '${{ env }}'))
+
     jobs:
     - job: NotificationJob
       displayName: Send notification for ${{ env }}
+
       steps:
       - task: PowerShell@2
         displayName: Send Teams notification
@@ -101,4 +110,5 @@ stages:
           targetType: inline
           script: |
             Write-Host "Sending notification for environment: ${{ env }}"
+
             # Add Teams webhook notification logic here

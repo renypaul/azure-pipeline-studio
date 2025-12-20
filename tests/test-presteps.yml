@@ -17,12 +17,14 @@ stages:
   jobs:
   - job: BuildJob
     displayName: Build Job
+
     steps:
     # Call build template with preSteps that reference another template via @self
     - template: build-template.yml@self
       parameters:
         buildConfig: $(buildConfiguration)
         preSteps:
+
         - template: nested-template.yml@self
           parameters:
             environment: $(targetEnvironment)

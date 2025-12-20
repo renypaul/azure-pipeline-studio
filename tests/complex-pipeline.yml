@@ -25,14 +25,17 @@ stages:
   jobs:
   - job: BuildJob
     displayName: Build Application
+
     steps:
     - checkout: self
       fetchDepth: 1
+
     - task: UseDotNet@2
       displayName: Install .NET SDK
       inputs:
         packageType: sdk
         version: 8.x
+
     - script: |
         echo "Multi-line script"
         echo "Building application"
@@ -45,5 +48,6 @@ stages:
         inputs:
           command: test
           projects: '**/*Tests.csproj'
+
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop

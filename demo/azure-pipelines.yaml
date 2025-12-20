@@ -27,4 +27,5 @@ stages:
   - template: templates/deploy-job.yml
     parameters:
       environmentName: Production
+
       # Missing required parameter 'strategy' will use default

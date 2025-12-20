@@ -10,6 +10,7 @@ stages:
 
   jobs:
   - job: BuildJob
+
     steps:
     - task: DotNetCoreCLI@2
       inputs:
